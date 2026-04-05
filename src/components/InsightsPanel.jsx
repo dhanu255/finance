@@ -1,15 +1,38 @@
 import React from "react";
 import { useAppState } from "../context/AppStateContext";
-import { getHighestSpendingCategory, getMonthlyComparison, getSavingsRate } from "../utils/financeSelectors";
+import {
+  getHighestSpendingCategory,
+  getMonthlyComparison,
+  getSavingsRate,
+} from "../utils/financeSelectors";
+
+const fmt = (value) =>
+  Number(value).toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  });
+
+/** Format "2026-03" → "Mar 2026" */
+function formatMonth(yyyyMM) {
+  if (!yyyyMM) return "N/A";
+  try {
+    return new Intl.DateTimeFormat("en-US", { year: "numeric", month: "short" }).format(
+      new Date(`${yyyyMM}-01`)
+    );
+  } catch {
+    return yyyyMM;
+  }
+}
 
 export function InsightsPanel() {
   const { transactions } = useAppState();
   const topCategory = getHighestSpendingCategory(transactions);
-  const monthly = getMonthlyComparison(transactions);
-  const savings = getSavingsRate(transactions);
+  const monthly     = getMonthlyComparison(transactions);
+  const savings     = getSavingsRate(transactions);
 
   return (
-    <aside className="panel insights-panel">
+    <aside className="panel insights-panel" aria-label="Financial insights">
       <header className="panel-header">
         <h2>Insights</h2>
       </header>
@@ -18,11 +41,7 @@ export function InsightsPanel() {
         <h3>Highest Spending Category</h3>
         <p>
           {topCategory
-            ? `${topCategory.category} (${topCategory.amount.toLocaleString("en-US", {
-                style: "currency",
-                currency: "USD",
-                maximumFractionDigits: 0
-              })})`
+            ? `${topCategory.category} (${fmt(topCategory.amount)})`
             : "Not enough expense data yet."}
         </p>
       </div>
@@ -31,29 +50,32 @@ export function InsightsPanel() {
         <h3>Monthly Comparison</h3>
         <p>
           {monthly.currentMonth
-            ? `${monthly.currentMonth} vs ${monthly.previousMonth || "N/A"}: ${monthly.delta >= 0 ? "+" : ""}${monthly.delta.toLocaleString(
-                "en-US",
-                { style: "currency", currency: "USD", maximumFractionDigits: 0 }
-              )} expense change`
+            ? <>
+                <strong>{formatMonth(monthly.currentMonth)}</strong>
+                {" vs "}
+                <strong>{formatMonth(monthly.previousMonth)}</strong>
+                {`: ${monthly.delta >= 0 ? "+" : ""}${fmt(monthly.delta)} expense change`}
+              </>
             : "No monthly data available."}
         </p>
       </div>
 
       <div className="insight-item">
         <h3>Savings</h3>
-        <p className="insight-savings-amount">
-          {savings.savings.toLocaleString("en-US", {
-            style: "currency",
-            currency: "USD",
-            maximumFractionDigits: 0
-          })}{" "}
-          saved overall
-        </p>
-        <p className="insight-savings-rate">
-          {(savings.rate * 100).toFixed(1)}% of total income — net after expenses.
-        </p>
+        {savings.isNegative ? (
+          <p className="insight-warning" role="alert">
+            ⚠️ You are spending more than you earn! Your expenses exceed your income by{" "}
+            <strong>{fmt(Math.abs(savings.savings))}</strong>.
+          </p>
+        ) : (
+          <>
+            <p className="insight-savings-amount">{fmt(savings.savings)} saved overall</p>
+            <p className="insight-savings-rate">
+              {(savings.rawRate * 100).toFixed(1)}% of total income — net after expenses.
+            </p>
+          </>
+        )}
       </div>
     </aside>
   );
 }
-
