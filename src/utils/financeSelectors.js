@@ -26,7 +26,7 @@ export function applySort(transactions, sort) {
 }
 
 export function getTotals(transactions) {
-  const income = transactions.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
+  const income   = transactions.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
   const expenses = transactions.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
   return { income, expenses, balance: income - expenses };
 }
@@ -34,14 +34,14 @@ export function getTotals(transactions) {
 export function getMonthlyAggregates(transactions) {
   const byMonth = new Map();
   for (const t of transactions) {
-    const month = t.date.slice(0, 7);
+    const month   = t.date.slice(0, 7);
     const current = byMonth.get(month) || { income: 0, expenses: 0, balance: 0 };
     if (t.type === "income") {
-      current.income += t.amount;
+      current.income  += t.amount;
       current.balance += t.amount;
     } else {
       current.expenses += t.amount;
-      current.balance -= t.amount;
+      current.balance  -= t.amount;
     }
     byMonth.set(month, current);
   }
@@ -66,26 +66,49 @@ export function getHighestSpendingCategory(transactions) {
   return top || null;
 }
 
+/**
+ * Returns monthly expense comparison using the real calendar (not array index).
+ * "Current month" = the calendar month containing today.
+ * "Previous month" = one calendar month prior.
+ */
 export function getMonthlyComparison(transactions) {
   const monthly = getMonthlyAggregates(transactions);
-  const current = monthly[monthly.length - 1];
-  const previous = monthly[monthly.length - 2];
-  if (!current) {
+  if (!monthly.length) {
     return { currentMonth: null, previousMonth: null, currentExpenses: 0, previousExpenses: 0, delta: 0 };
   }
-  const currentExpenses = current.expenses;
+
+  const now         = new Date();
+  const currentKey  = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const prevDate    = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const previousKey = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}`;
+
+  const currentData  = monthly.find((m) => m.month === currentKey);
+  const previousData = monthly.find((m) => m.month === previousKey);
+
+  // Fallback: if no data for real "current" month, use the most recent month in data
+  const fallback = monthly[monthly.length - 1];
+  const current  = currentData || fallback;
+  const previous = previousData || monthly[monthly.length - 2] || null;
+
+  const currentExpenses  = current  ? current.expenses  : 0;
   const previousExpenses = previous ? previous.expenses : 0;
+
   return {
-    currentMonth: current.month,
-    previousMonth: previous ? previous.month : null,
+    currentMonth:    current  ? current.month  : null,
+    previousMonth:   previous ? previous.month : null,
     currentExpenses,
     previousExpenses,
-    delta: currentExpenses - previousExpenses
+    delta: currentExpenses - previousExpenses,
   };
 }
 
+/**
+ * Returns savings rate. When income is zero or balance is negative, provides
+ * an isNegative flag so the UI can show a warning.
+ */
 export function getSavingsRate(transactions) {
   const { income, balance } = getTotals(transactions);
-  return { income, savings: balance, rate: income === 0 ? 0 : balance / income };
+  const rate       = income === 0 ? 0 : balance / income;
+  const isNegative = balance < 0;
+  return { income, savings: balance, rate: Math.max(rate, 0), rawRate: rate, isNegative };
 }
-
